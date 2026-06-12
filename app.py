@@ -143,17 +143,18 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
 
     try:
-    df = pd.read_csv(uploaded_file)
-    except:
-        try:
-            df = pd.read_csv(uploaded_file, encoding="latin1")
-        except:
-            try:
-                df = pd.read_csv(uploaded_file, sep=";")
-            except Exception as e:
-                st.error(f"Could not read file: {e}")
-                st.stop()
+        df = pd.read_csv(
+            uploaded_file,
+            encoding_errors="ignore"
+        )
 
+        # st.success("✅ File Uploaded Successfully!")
+
+    except Exception as e:
+        st.error(
+            f"Invalid CSV file: {e}"
+        )
+        st.stop()
     st.success("✅ File Uploaded Successfully!")
 
     # -----------------------------
