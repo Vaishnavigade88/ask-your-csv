@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
-
+# import google.generativeai as genai
+from groq import Groq
 # -----------------------------
 # Page Config
 # -----------------------------
@@ -43,17 +43,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Gemini Setup
+# Grok Setup
 # -----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+client = Groq(
+    api_key=st.secrets["GROQ_API_KEY"]
+)
 
-# model = genai.GenerativeModel("gemini-1.5-flash")
-model = genai.GenerativeModel("gemini-2.0-flash")
+def query_ai(prompt):
+    completion = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
 
-def query_gemini(prompt):
-    response = model.generate_content(prompt)
-    return response.text
-
+    return completion.choices[0].message.content
 
 # -----------------------------
 # Sidebar
@@ -76,14 +83,14 @@ AI-Powered CSV Analytics Platform
 
 ✅ Interactive Charts
 
-✅ Gemini AI Insights
+✅ Grok AI Insights
 
 ### Tech Stack
 
 - Python
 - Streamlit
 - Pandas
-- Gemini AI
+- Grok AI
 """)
 
     st.success("Ready for Analysis")
@@ -94,7 +101,7 @@ AI-Powered CSV Analytics Platform
 st.markdown("""
 <div class="main-header">
 <h1>📊 DataPilot AI</h1>
-<h4>Transform CSV Files into Actionable Insights using Gemini AI</h4>
+<h4>Transform CSV Files into Actionable Insights using Grok AI</h4>
 </div>
 """, unsafe_allow_html=True)
 
@@ -125,7 +132,7 @@ with col2:
 with col3:
     st.markdown("""
     <div class="feature-box">
-    <h3>🤖 Gemini AI</h3>
+    <h3>🤖 Grok AI</h3>
     Ask questions and get intelligent insights.
     </div>
     """, unsafe_allow_html=True)
@@ -324,7 +331,7 @@ if uploaded_file is not None:
     # -----------------------------
     # AI Section
     # -----------------------------
-    st.subheader("🤖 Ask Gemini About Your Data")
+    st.subheader("🤖 Ask AI About Your Data")
 
     user_question = st.text_input(
         "Ask a question about your dataset"
@@ -332,7 +339,7 @@ if uploaded_file is not None:
 
     if user_question:
 
-        with st.spinner("Gemini is analyzing your data..."):
+        with st.spinner("AI is analyzing your data..."):
 
             prompt = f"""
 You are an expert data analyst.
@@ -355,9 +362,9 @@ Answer:
 """
 
             try:
-                answer = query_gemini(prompt)
+                answer = query_ai(prompt)
 
-                st.success("🧠 Gemini Insight")
+                st.success("🧠 AI Insight")
                 st.write(answer)
 
             except Exception as e:
