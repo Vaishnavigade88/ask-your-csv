@@ -6,3 +6,6 @@ sentence-transformers
 faiss-cpu
 torch
 transformers
+scikit-learn
+scipy
+huggingface-hub
