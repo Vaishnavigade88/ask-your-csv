@@ -1,4 +1,9 @@
 streamlit
 pandas
-requests
 groq
+sentence-transformers
+faiss-cpu
+numpy
+torch
+transformers
+scikit-learn
