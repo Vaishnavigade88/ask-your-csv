@@ -1,4 +1,4 @@
-# 📊 CSV Monster Bot
+# 📊 CSV Insight AI
 
 A powerful and interactive tool built using **Streamlit** that lets users upload CSV files, explore data, perform data cleaning (nulls, duplicates, outliers), get quick statistics, visualize data, and even interact with it using **AI chat-based analysis** — all in one seamless experience!
 
