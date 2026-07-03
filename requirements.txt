@@ -1,9 +1,8 @@
 streamlit
 pandas
+numpy
 groq
 sentence-transformers
 faiss-cpu
-numpy
 torch
 transformers
-scikit-learn
