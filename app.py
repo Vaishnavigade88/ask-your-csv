@@ -1,353 +1,103 @@
 import streamlit as st
 import pandas as pd
-# import google.generativeai as genai
+import numpy as np
 from groq import Groq
-# -----------------------------
-# Page Config
-# -----------------------------
-st.set_page_config(
-    page_title="DataPilot AI",
-    page_icon="📊",
-    layout="wide"
-)
+from sentence_transformers import SentenceTransformer
+import faiss
 
-# -----------------------------
-# Custom Styling
-# -----------------------------
-st.markdown("""
-<style>
-.main-header {
-    text-align: center;
-    padding: 20px;
-}
+st.set_page_config(page_title="DataPilot AI RAG", page_icon="📊", layout="wide")
 
-.metric-card {
-    background-color: #262730;
-    padding: 15px;
-    border-radius: 10px;
-    text-align: center;
-}
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-.feature-box {
-    background-color: #262730;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #3a3b45;
-    margin-bottom: 10px;
-}
-
-.stButton>button {
-    width: 100%;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# Grok Setup
-# -----------------------------
-client = Groq(
-    api_key=st.secrets["GROQ_API_KEY"]
-)
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
 def query_ai(prompt):
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+        messages=[{"role": "user", "content": prompt}]
     )
-
     return completion.choices[0].message.content
 
-# -----------------------------
-# Sidebar
-# -----------------------------
-with st.sidebar:
-    st.title("🚀 DataPilot AI")
+def build_vector_store(df):
+    text_data = []
+    for _, row in df.iterrows():
+        text_data.append(" | ".join(map(str, row.values)))
 
-    st.markdown("""
-### About
+    model = load_embedding_model()
+    embeddings = model.encode(text_data, convert_to_numpy=True)
 
-AI-Powered CSV Analytics Platform
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(embeddings.astype("float32"))
 
-### Features
+    return model, index, text_data
 
-✅ Upload CSV Files
+def retrieve_context(query, model, index, text_data, k=5):
+    query_embedding = model.encode([query], convert_to_numpy=True)
 
-✅ Data Cleaning
+    distances, indices = index.search(
+        query_embedding.astype("float32"), k
+    )
 
-✅ Statistics
+    retrieved_rows = []
+    for idx in indices[0]:
+        if idx < len(text_data):
+            retrieved_rows.append(text_data[idx])
 
-✅ Interactive Charts
+    return "\n".join(retrieved_rows)
 
-✅ Grok AI Insights
+st.title("📊 DataPilot AI - RAG Edition")
+st.write("Upload CSV → Build Embeddings → Retrieve Context → Ask Groq")
 
-### Tech Stack
-
-- Python
-- Streamlit
-- Pandas
-- Grok AI
-""")
-
-    st.success("Ready for Analysis")
-
-# -----------------------------
-# Landing Page
-# -----------------------------
-st.markdown("""
-<div class="main-header">
-<h1>📊 DataPilot AI</h1>
-<h4>Transform CSV Files into Actionable Insights using Grok AI</h4>
-</div>
-""", unsafe_allow_html=True)
-
-st.info(
-    "🤖 Upload a CSV file and ask questions in natural language. "
-    "Clean data, generate statistics, visualize trends, and get AI-powered insights."
-)
-
-# Feature Cards
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown("""
-    <div class="feature-box">
-    <h3>🧹 Data Cleaning</h3>
-    Handle missing values, duplicates, and column operations.
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown("""
-    <div class="feature-box">
-    <h3>📈 Visualizations</h3>
-    Generate charts instantly from your data.
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown("""
-    <div class="feature-box">
-    <h3>🤖 Grok AI</h3>
-    Ask questions and get intelligent insights.
-    </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
-
-# -----------------------------
-# Upload CSV
-# -----------------------------
-uploaded_file = st.file_uploader(
-    "📂 Upload Your CSV File",
-    type=["csv"]
-)
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file, encoding_errors="ignore")
 
-    try:
-        df = pd.read_csv(
-            uploaded_file,
-            encoding_errors="ignore"
-        )
+    st.success("CSV Uploaded Successfully")
+    st.dataframe(df.head())
 
-        # st.success("✅ File Uploaded Successfully!")
-
-    except Exception as e:
-        st.error(
-            f"Invalid CSV file: {e}"
-        )
-        st.stop()
-    st.success("✅ File Uploaded Successfully!")
-
-    # -----------------------------
-    # Dataset Overview
-    # -----------------------------
-    st.subheader("📋 Dataset Overview")
-
-    rows = df.shape[0]
-    cols = df.shape[1]
-    missing = int(df.isnull().sum().sum())
-    duplicates = int(df.duplicated().sum())
-
+    st.subheader("Dataset Overview")
     c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Rows", df.shape[0])
+    c2.metric("Columns", df.shape[1])
+    c3.metric("Missing Values", int(df.isnull().sum().sum()))
+    c4.metric("Duplicates", int(df.duplicated().sum()))
 
-    c1.metric("Rows", rows)
-    c2.metric("Columns", cols)
-    c3.metric("Missing Values", missing)
-    c4.metric("Duplicates", duplicates)
-
-    # -----------------------------
-    # Raw Data
-    # -----------------------------
-    st.subheader("📂 Raw Data")
-    st.dataframe(df, use_container_width=True)
-
-    # -----------------------------
-    # Cleaning Options
-    # -----------------------------
-    st.subheader("🧹 Data Cleaning")
-
-    if st.checkbox("Remove Missing Values"):
-        df.dropna(inplace=True)
-        st.success("Missing values removed.")
-
-    if st.checkbox("Fill Missing Values"):
-
-        fill_option = st.selectbox(
-            "Choose Fill Method",
-            ["Mean", "Median", "Mode"]
-        )
-
-        for col in df.select_dtypes(
-            include=["float64", "int64"]
-        ).columns:
-
-            if fill_option == "Mean":
-                df[col] = df[col].fillna(df[col].mean())
-
-            elif fill_option == "Median":
-                df[col] = df[col].fillna(df[col].median())
-
-            elif fill_option == "Mode":
-                df[col] = df[col].fillna(df[col].mode()[0])
-
-        st.success(f"Missing values filled using {fill_option}")
-
-    if st.checkbox("Remove Duplicate Rows"):
-        df.drop_duplicates(inplace=True)
-        st.success("Duplicate rows removed.")
-
-    if st.checkbox("Drop Columns"):
-
-        cols_to_drop = st.multiselect(
-            "Select Columns",
-            df.columns
-        )
-
-        if cols_to_drop:
-            df.drop(columns=cols_to_drop, inplace=True)
-            st.success("Columns removed successfully.")
-
-    if st.checkbox("Rename Columns"):
-
-        selected_cols = st.multiselect(
-            "Select Columns to Rename",
-            df.columns
-        )
-
-        for col in selected_cols:
-
-            new_name = st.text_input(
-                f"Rename '{col}' to:"
-            )
-
-            if new_name:
-                df.rename(
-                    columns={col: new_name},
-                    inplace=True
-                )
-
-    if st.checkbox("Reset Index"):
-        df.reset_index(drop=True, inplace=True)
-        st.success("Index reset successfully.")
-
-    # -----------------------------
-    # Cleaned Data
-    # -----------------------------
-    st.subheader("📊 Cleaned Dataset")
-    st.dataframe(df, use_container_width=True)
-
-    # -----------------------------
-    # Statistics
-    # -----------------------------
-    st.subheader("📈 Statistical Summary")
-
+    st.subheader("Statistical Summary")
     try:
-        st.dataframe(
-            df.describe(),
-            use_container_width=True
-        )
-    except:
-        st.warning("No numerical columns found.")
+        st.dataframe(df.describe())
+    except Exception:
+        st.info("No numeric columns")
 
-    # -----------------------------
-    # Visualizations
-    # -----------------------------
-    st.subheader("📊 Data Visualization")
+    with st.spinner("Building Vector Store..."):
+        model, index, text_data = build_vector_store(df)
 
-    numeric_cols = df.select_dtypes(
-        include=["float64", "int64"]
-    ).columns.tolist()
+    st.success("RAG Vector Store Ready")
 
-    if len(numeric_cols) > 0:
-
-        chart_type = st.selectbox(
-            "Chart Type",
-            [
-                "Line Chart",
-                "Bar Chart",
-                "Area Chart"
-            ]
-        )
-
-        column_to_plot = st.selectbox(
-            "Select Column",
-            numeric_cols
-        )
-
-        if chart_type == "Line Chart":
-            st.line_chart(df[column_to_plot])
-
-        elif chart_type == "Bar Chart":
-            st.bar_chart(df[column_to_plot])
-
-        elif chart_type == "Area Chart":
-            st.area_chart(df[column_to_plot])
-
-    else:
-        st.warning(
-            "No numeric columns available for visualization."
-        )
-
-    # -----------------------------
-    # Download CSV
-    # -----------------------------
-    st.subheader("📥 Download Cleaned Data")
-
-    csv = df.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        label="Download Cleaned CSV",
-        data=csv,
-        file_name="cleaned_data.csv",
-        mime="text/csv"
-    )
-
-    # -----------------------------
-    # AI Section
-    # -----------------------------
-    st.subheader("🤖 Ask AI About Your Data")
-
-    user_question = st.text_input(
-        "Ask a question about your dataset"
-    )
+    user_question = st.text_input("Ask a question about your dataset")
 
     if user_question:
+        context = retrieve_context(
+            user_question,
+            model,
+            index,
+            text_data,
+            k=5
+        )
 
-        with st.spinner("AI is analyzing your data..."):
+        with st.expander("Retrieved Context"):
+            st.code(context)
 
-            prompt = f"""
+        prompt = f"""
 You are an expert data analyst.
 
-Analyze the dataset below and answer the user's question.
+Use ONLY the provided context.
 
-Dataset:
-{df.head(100).to_string(index=False)}
+Context:
+{context}
 
 Question:
 {user_question}
@@ -361,14 +111,8 @@ Instructions:
 Answer:
 """
 
-            try:
-                answer = query_ai(prompt)
+        with st.spinner("Analyzing..."):
+            answer = query_ai(prompt)
 
-                st.success("🧠 AI Insight")
-                st.write(answer)
-
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-else:
-    st.info("⬆️ Upload a CSV file to begin analysis.")
+        st.subheader("AI Insight")
+        st.write(answer)
